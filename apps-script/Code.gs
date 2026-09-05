@@ -179,3 +179,14 @@ function setupOnce() {
   folder();
   Logger.log('OK — sheet "%s" và folder "%s" đã sẵn sàng.', SHEET_NAME, DRIVE_FOLDER);
 }
+
+/* Chạy hàm này trong editor để biết script đang ghi vào Sheet nào.
+   Sau khi Run, xem kết quả ở panel "Nhật ký thực thi" / "Execution log". */
+function whereAmI() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  Logger.log('Tên Sheet : ' + ss.getName());
+  Logger.log('URL Sheet : ' + ss.getUrl());
+  Logger.log('Ghi vào tab: ' + SHEET_NAME);
+  Logger.log('Số dòng hiện có (kể cả header): ' + sheet().getLastRow());
+  Logger.log('Folder CV : ' + folder().getUrl());
+}
