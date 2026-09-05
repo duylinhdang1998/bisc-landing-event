@@ -3002,4 +3002,179 @@ body{background:#fff}
  if(j&&j.textContent.indexOf('YOUR-DOMAIN.com')>-1)j.textContent=fix(j.textContent);
 }catch(e){}})();
 </script>
+<style id="reg-submit-css">
+/* === v48 — Gửi đăng ký về Google Sheet === */
+#dang-ky .form-card{position:relative}
+.reg-hp{position:absolute!important;left:-9999px!important;width:1px;height:1px;opacity:0;pointer-events:none}
+.reg-msg{margin-top:14px;padding:12px 14px;border-radius:11px;font-size:12.5px;line-height:1.7;display:none}
+.reg-msg.show{display:block;animation:regMsgIn .3s ease both}
+.reg-msg.err{background:#FDECEC;border:1px solid #F3C0C0;color:#9B2222}
+@keyframes regMsgIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+.submit.is-busy{pointer-events:none;opacity:.72;box-shadow:0 6px 0 #D79F00}
+.reg-spin{display:inline-block;width:13px;height:13px;margin-right:8px;vertical-align:-2px;
+  border:2px solid rgba(9,44,59,.28);border-top-color:#092C3B;border-radius:50%;
+  animation:regSpin .7s linear infinite}
+@keyframes regSpin{to{transform:rotate(360deg)}}
+.reg-done{text-align:center;padding:26px 6px 10px;animation:regMsgIn .4s ease both}
+.reg-done .tick{width:66px;height:66px;margin:0 auto 18px;border-radius:50%;
+  background:linear-gradient(180deg,#FFD761,#FFC000);display:flex;align-items:center;
+  justify-content:center;box-shadow:0 10px 26px rgba(255,192,0,.36)}
+.reg-done .tick svg{width:30px;height:30px}
+.reg-done h3{margin:0 0 10px;font-size:21px;line-height:1.35;color:#092C3B;font-weight:800}
+.reg-done p{margin:0 0 8px;font-size:13px;line-height:1.85;color:#3D5A66}
+.reg-done .who{font-weight:700;color:#092C3B}
+.reg-done .btn{margin-top:18px;display:inline-flex}
+@media(prefers-reduced-motion:reduce){
+  .reg-msg.show,.reg-done{animation:none}
+  .reg-spin{animation-duration:1.6s}
+}
+</style>
+<script id="reg-submit-js">
+/* === v48 — Form đăng ký -> Google Apps Script -> Google Sheet + Drive ===
+   ĐỔI 2 HẰNG SỐ DƯỚI ĐÂY cho khớp với deployment của bạn. */
+(function () {
+  var ENDPOINT = 'https://script.google.com/macros/s/AKfycbzYsuUs0s2yl2Z9NO006hgArVmYKtsEw1Ndovdc_43EG0hOIIZ3Z4mKYUwohZBJ7t5vow/exec';       // dán Web app URL (.../exec)
+  var TOKEN    = 'bisc-landing-event-14092026';        // phải trùng SHARED_TOKEN trong Code.gs
+  var MAX_CV   = 5 * 1024 * 1024;
+
+  var form = document.querySelector('#dang-ky form');
+  if (!form) return;
+  var btn = form.querySelector('.submit');
+  if (!btn) return;
+
+  /* honeypot — bot điền vào là bị bỏ qua ở server */
+  var hp = document.createElement('input');
+  hp.type = 'text'; hp.name = 'company'; hp.className = 'reg-hp';
+  hp.tabIndex = -1; hp.autocomplete = 'off'; hp.setAttribute('aria-hidden', 'true');
+  form.appendChild(hp);
+
+  var msg = document.createElement('div');
+  msg.className = 'reg-msg err';
+  msg.setAttribute('role', 'alert');
+  btn.parentNode.insertBefore(msg, btn);
+
+  var busy = false;
+  var label = btn.innerHTML;
+
+  function fail(text) {
+    msg.textContent = text;
+    msg.classList.add('show');
+    msg.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  function clearFail() { msg.classList.remove('show'); }
+  function setBusy(on) {
+    busy = on;
+    btn.classList.toggle('is-busy', on);
+    btn.disabled = on;
+    btn.innerHTML = on ? '<span class="reg-spin"></span>Đang gửi…' : label;
+  }
+
+  function toBase64(file) {
+    return new Promise(function (res, rej) {
+      var r = new FileReader();
+      r.onload = function () { res(String(r.result).split(',')[1]); };
+      r.onerror = function () { rej(new Error('read')); };
+      r.readAsDataURL(file);
+    });
+  }
+
+  function send(payload) {
+    var body = JSON.stringify(payload);
+    // Content-Type text/plain => request "simple", không bị CORS preflight chặn
+    return fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: body,
+      redirect: 'follow'
+    })
+      .then(function (r) { return r.json(); })
+      .catch(function () {
+        // Một số cấu hình deployment không trả CORS header => gửi mù rồi coi như thành công
+        return fetch(ENDPOINT, {
+          method: 'POST', mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: body
+        }).then(function () { return { ok: true, blind: true }; });
+      });
+  }
+
+  function success(name) {
+    var card = form;
+    card.innerHTML =
+      '<div class="reg-done">' +
+        '<div class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="#092C3B" ' +
+          'stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M20 6L9 17l-5-5"/></svg></div>' +
+        '<h3>Đăng ký thành công!</h3>' +
+        '<p>Cảm ơn <span class="who"></span> đã đăng ký <strong>BISC Audit Simulation 2026</strong>.</p>' +
+        '<p>OA Zalo của BISC sẽ liên hệ xác nhận trong 1–2 ngày làm việc. ' +
+          'Hãy đảm bảo số điện thoại bạn đăng ký đang dùng Zalo.</p>' +
+        '<a class="btn primary" href="https://zalo.me/bisctrainingcenter" ' +
+          'target="_blank" rel="noopener">Mở Zalo OA →</a>' +
+      '</div>';
+    card.querySelector('.who').textContent = name;
+    card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (busy) return;
+    clearFail();
+
+    if (/__APPS_SCRIPT/.test(ENDPOINT)) {
+      fail('Chưa cấu hình endpoint. Dán Web app URL của Apps Script vào biến ENDPOINT.');
+      return;
+    }
+    if (!form.reportValidity()) return;
+
+    var fd = new FormData(form);
+    var cv = fd.get('cv');
+
+    if (!cv || !cv.name) { fail('Vui lòng tải lên CV dạng PDF.'); return; }
+    if (!/\.pdf$/i.test(cv.name) && cv.type !== 'application/pdf') {
+      fail('CV phải là file PDF.'); return;
+    }
+    if (cv.size > MAX_CV) {
+      fail('CV vượt quá 5MB (' + (cv.size / 1048576).toFixed(1) + 'MB). Vui lòng nén lại rồi thử lại.');
+      return;
+    }
+
+    setBusy(true);
+
+    toBase64(cv)
+      .then(function (b64) {
+        return send({
+          token: TOKEN,
+          company: fd.get('company') || '',
+          fullname: fd.get('fullname'),
+          phone: fd.get('phone'),
+          email: fd.get('email'),
+          university: fd.get('university'),
+          advisor: fd.get('advisor'),
+          offer: fd.get('offer'),
+          assurance_status: fd.get('assurance_status'),
+          cv: { name: cv.name, data: b64 },
+          source: location.href
+        });
+      })
+      .then(function (out) {
+        if (out && out.ok) { success(String(fd.get('fullname') || '').trim()); return; }
+        var code = (out && out.error) || 'unknown';
+        var map = {
+          cv_too_large: 'CV vượt quá 5MB. Vui lòng nén lại rồi thử lại.',
+          bad_email: 'Email không hợp lệ. Vui lòng kiểm tra lại.',
+          bad_phone: 'Số điện thoại không hợp lệ. Vui lòng kiểm tra lại.',
+          unauthorized: 'Cấu hình token chưa khớp. Vui lòng báo ban tổ chức.',
+          busy: 'Hệ thống đang bận. Vui lòng thử lại sau ít giây.'
+        };
+        setBusy(false);
+        fail(map[code] || ('Gửi không thành công (' + code + '). Vui lòng thử lại hoặc nhắn qua Zalo OA của BISC.'));
+      })
+      .catch(function () {
+        setBusy(false);
+        fail('Không gửi được. Kiểm tra kết nối mạng rồi thử lại, hoặc nhắn qua Zalo OA của BISC.');
+      });
+  });
+})();
+</script>
 </body></html>
